@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  dcs-download:
+    image: download:v4
+    container_name: dcs-download
+    user: root
+    ports:
+      - "8090:8090"
+    command: ./main
+    #tty: true
+    volumes:
+      - "./dcs-download/download:/download"
+      - "./dcs-download/config/config.yaml:/config/config.yaml"
+  sftp-debug:
+    image: atmoz/sftp
+    ports:
+      - "2222:22"
+    command: ossftp:oss123:1001::/
+    volumes:
+        - ./sftp-debug:/home/ossftp/var/opt/ericsson/

@@ -1,0 +1,19 @@
+ftp:
+  ftpHost: '192.168.33.10'
+  ftpUserName: 'ossftp'
+  ftpPassword: 'oss123'
+  ftpKeyPath:
+  passphrase:
+  ftpPort: 2222
+  remotePath: /var/opt/ericsson/
+
+localPath: C:\\workspace\\Go_download\\download
+
+collector:
+  measFileInfo:
+    - id: 'GLPGW1'
+      filePattern: .*.xml.gz$
+      remotePath: /var/opt/ericsson/GLPGW1
+    - id: 'GLCUDB1'
+      filePattern: .*_GLCUDB1.xml$
+      remotePath: /var/opt/ericsson/GLCUDB1

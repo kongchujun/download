@@ -1,0 +1,19 @@
+ftp:
+  ftpHost: 'sftp-debug'
+  ftpUserName: 'ossftp'
+  ftpPassword: 'oss123'
+  ftpKeyPath:
+  passphrase:
+  ftpPort: 22
+  remotePath: /var/opt/ericsson/
+
+localPath: /download
+
+collector:
+  measFileInfo:
+    - id: 'GLPGW1'
+      filePattern: .*.xml.gz$
+      remotePath: /var/opt/ericsson/GLPGW1
+    - id: 'GLCUDB1'
+      filePattern: .*_GLCUDB1.xml$
+      remotePath: /var/opt/ericsson/GLCUDB1
