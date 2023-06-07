@@ -19,3 +19,10 @@ services:
     command: ossftp:oss123:1001::/
     volumes:
         - ./sftp-debug:/home/ossftp/var/opt/ericsson/
+  kdb:
+    image: emilebres/ubuntu-kdb:latest
+    ports:
+      - "5006:5000"
+    volumes:
+      - ./kdb/start.q:/app/start.q
+    command: q /app/start.q
