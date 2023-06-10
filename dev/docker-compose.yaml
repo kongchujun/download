@@ -20,7 +20,7 @@ services:
     volumes:
         - ./sftp-debug:/home/ossftp/var/opt/ericsson/
   kdb:
-    image: aquaqanalytics/kdb:latest
+    image: timestored/kdb:latest
     ports:
       - "5006:5000"
     volumes:
