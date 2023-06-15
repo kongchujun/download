@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -17,7 +18,7 @@ import (
 )
 
 func HelloHandler(c *gin.Context) {
-	
+
 	RunInfo()
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Helssssslo, World!",
@@ -52,7 +53,9 @@ func RunInfo() {
 		fmt.Println("out :", len(resultList))
 
 		// 创建本地文件
-		localDirPath := filepath.Join(tmpPath, fileInfo.ID)
+		localDirPath := tmpPath + checkOS() + fileInfo.ID
+		// 当在本地测试的时候，路径的分隔符是不同的
+
 		fmt.Println("======", localDirPath)
 		// 检查文件夹是否存在
 		_, err = os.Stat(localDirPath)
@@ -116,4 +119,17 @@ func ListFiles(sc *sftp.Client, remoteDir string) (resultList []string, err erro
 	}
 	// fmt.Println("===", resultList)
 	return resultList, nil
+}
+
+func checkOS() string {
+	switch os := runtime.GOOS; os {
+	case "darwin":
+		return "/"
+	case "linux":
+		return "/"
+	case "windows":
+		return "\\"
+	default:
+		return "/"
+	}
 }

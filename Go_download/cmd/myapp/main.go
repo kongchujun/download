@@ -10,8 +10,8 @@ import (
 
 func main() {
 
-	err := config.LoadConfig("/config/config.yaml")
-	// err := config.LoadConfig("/Users/kcj/projects/godownload/dev/dcs-download/config/config.yaml")
+	//err := config.LoadConfig("/config/config.yaml")
+	err := config.LoadConfig("/Users/kcj/projects/godownload/download/Go_download/configs/config.yaml")
 	if err != nil {
 		panic(err)
 	}

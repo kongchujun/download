@@ -1,5 +1,5 @@
 ftp:
-  ftpHost: '192.168.33.10'
+  ftpHost: 'localhost'
   ftpUserName: 'ossftp'
   ftpPassword: 'oss123'
   ftpKeyPath:
@@ -7,7 +7,7 @@ ftp:
   ftpPort: 2222
   remotePath: /var/opt/ericsson/
 
-localPath: C:\\workspace\\Go_download\\download
+localPath: /Users/kcj/projects/godownload/download/Go_download/download
 
 collector:
   measFileInfo:

@@ -16,3 +16,6 @@ just in case: vagrant plugin install vagrant-disksize
 vagrant ssh
 systemctl start docker
 ```
+
+# when generate the image
+change config file path in Go_download/cmd/myapp/main.go
