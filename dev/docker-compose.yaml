@@ -14,10 +14,7 @@ services:
       - "./dcs-download/config/config.yaml:/config/config.yaml"
   sftp-debug:
     image: atmoz/sftp
-    environment:
-      - TZ=Asia/Shanghai
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
+
     ports:
       - "2222:22"
     command: ossftp:oss123:1001::/
