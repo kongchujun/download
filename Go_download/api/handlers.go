@@ -20,12 +20,18 @@ import (
 )
 
 func HelloHandler(c *gin.Context) {
+	location, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		fmt.Println("err: ", err)
+		return
+	}
 	startTimeStr := c.Query("start")
 	if startTimeStr == "" {
-		startTimeStr = getOneHour()
+		startTimeStr = getOneHour(location)
 	}
 	layout := "2006-01-02T15:04"
-	t, err := time.Parse(layout, startTimeStr)
+
+	t, err := time.ParseInLocation(layout, startTimeStr, location)
 	if err != nil {
 		fmt.Println("err: ", err)
 		return
@@ -37,8 +43,8 @@ func HelloHandler(c *gin.Context) {
 	})
 }
 
-func getOneHour() string {
-	currentTime := time.Now()
+func getOneHour(location *time.Location) string {
+	currentTime := time.Now().In(location)
 	oneHourBefore := currentTime.Add(-time.Hour)
 	return oneHourBefore.Format("2006-01-02T15:04")
 }
