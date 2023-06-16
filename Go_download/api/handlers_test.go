@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -70,4 +71,27 @@ func TestTime(t *testing.T) {
 	fmt.Println("curent ", currnetTime)
 	fmt.Println("ta", ta)
 	fmt.Println(value)
+}
+
+func TestSubtractList(t *testing.T) {
+	testCase := []struct {
+		name     string
+		a        []string
+		b        []string
+		resDelta []string
+	}{
+		{
+			name:     "substrct",
+			a:        []string{"1", "2", "3", "4", "5"},
+			b:        []string{"3", "4", "5", "6"},
+			resDelta: []string{"1", "2"},
+		},
+	}
+
+	for _, tc := range testCase {
+		t.Run(tc.name, func(t *testing.T) {
+			res := SubtractList(tc.a, tc.b)
+			assert.Equal(t, res, tc.resDelta)
+		})
+	}
 }
