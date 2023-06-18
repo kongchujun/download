@@ -6,6 +6,6 @@ import (
 
 func SetupRouter() *gin.Engine {
 	router := gin.Default()
-	router.GET("/name", HelloHandler)
+	router.GET("/download", HelloHandler)
 	return router
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	config "godownload/configs"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -20,83 +21,98 @@ import (
 )
 
 func HelloHandler(c *gin.Context) {
-	location, err := time.LoadLocation("Asia/Shanghai")
-	if err != nil {
-		fmt.Println("err: ", err)
-		return
-	}
-	startTimeStr := c.Query("start")
-	if startTimeStr == "" {
-		startTimeStr = getOneHour(location)
-	}
+	// these three value should be taken out from setting in the furture
+	// config should be a interface: yaml, postgres, mongo etc.
+	timeZone := "Asia/Shanghai"
+	queryKey := "start"
 	layout := "2006-01-02T15:04"
 
-	t, err := time.ParseInLocation(layout, startTimeStr, location)
+	//it should be merge into a struct
+	returnCode := http.StatusOK
+	msg := "ok"
+
+	t, err := GetStartTime(c, queryKey, timeZone, layout)
 	if err != nil {
-		fmt.Println("err: ", err)
+		returnCode = http.StatusBadRequest
+		c.JSON(returnCode, gin.H{"error": err.Error()})
+		c.Abort()
 		return
 	}
 
-	RunInfo(t)
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Helssssslo, World!",
+	RunDownload(*t)
+	c.JSON(returnCode, gin.H{
+		"message": msg,
 	})
 }
 
-func getOneHour(location *time.Location) string {
+// GetStartTime: get the start time so that program can take how many files you can get
+// from remote server.
+// todo: untest
+// c, _ := gin.CreateTestContext(httptest.NewRecorder())
+// 设置请求的 HTTP 方法、路径和查询参数
+// c.Request, _ = http.NewRequest("GET", "/user", nil)
+// c.Request.URL.RawQuery = "name=John"
+func GetStartTime(c *gin.Context, key string, timeZone string, layout string) (*time.Time, error) {
+	location, err := time.LoadLocation(timeZone)
+	if err != nil {
+		return nil, err
+	}
 	currentTime := time.Now().In(location)
 	oneHourBefore := currentTime.Add(-time.Hour)
-	return oneHourBefore.Format("2006-01-02T15:04")
+
+	startTimeStr := c.DefaultQuery(key, oneHourBefore.Format(layout))
+
+	t, err := time.ParseInLocation(layout, startTimeStr, location)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
 
-func RunInfo(t time.Time) {
+func GetSshConfig(conf *config.Config) *ssh.ClientConfig {
 	sshConfig := &ssh.ClientConfig{
-		User: config.ConfigInstance.FTPConfig.FTPUserName,
+		User: conf.FTPConfig.FTPUserName,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(config.ConfigInstance.FTPConfig.FTPPassword),
+			ssh.Password(conf.FTPConfig.FTPPassword),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
-	// SSH 连接
-	sshClient, err := ssh.Dial("tcp", config.ConfigInstance.FTPConfig.FTPHost+":"+strconv.Itoa(config.ConfigInstance.FTPConfig.FTPPort), sshConfig)
+	return sshConfig
+}
+
+func GetSshClient(sshConfig *ssh.ClientConfig, host string, port int) (*ssh.Client, error) {
+	sshClient, err := ssh.Dial("tcp", host+":"+strconv.Itoa(port), sshConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return sshClient, err
+}
+
+func RunDownload(t time.Time) {
+	//prepare for create sftp
+	sshConfig := GetSshConfig(config.ConfigInstance)
+	host := config.ConfigInstance.FTPConfig.FTPHost
+	port := config.ConfigInstance.FTPConfig.FTPPort
+	sshClient, err := GetSshClient(sshConfig, host, port)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer sshClient.Close()
-
-	// 创建 SFTP 客户端
+	// create SFTP client
 	sftpClient, err := sftp.NewClient(sshClient)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer sftpClient.Close()
-	// C:\workspace\Go_download\download
+
 	tmpPath := config.ConfigInstance.LocalDir
 	for _, fileInfo := range config.ConfigInstance.CollectorConfig.MeasFileInfo {
-		resultList, _ := ListFiles(sftpClient, fileInfo.RemotePath, t)
-		fmt.Println("out :", len(resultList))
-
 		// 创建本地文件
 		localDirPath := tmpPath + checkOS() + fileInfo.ID
-		// 当在本地测试的时候，路径的分隔符是不同的
-		//获取本地文件List的方法：
-		localFileList, err := GetFileFromFolder(localDirPath)
-		if err != nil {
-			return
-		}
-		deltaResulList := SubtractList(resultList, localFileList)
-		fmt.Println("======", localDirPath)
-		// 检查文件夹是否存在
-		_, err = os.Stat(localDirPath)
-		if os.IsNotExist(err) {
-			// 文件夹不存在，创建文件夹
-			err := os.Mkdir(localDirPath, 0755)
-			if err != nil {
-				fmt.Println("无法创建文件夹:", err)
-			}
-			fmt.Println("文件夹已创建")
-		}
-		for _, fileName := range deltaResulList {
+		resultList, _ := ListFiles(sftpClient, fileInfo.RemotePath, localDirPath, t)
+
+		for _, fileName := range resultList {
+
 			// 读取远端的文件
 			remoteFilePath := filepath.Join(fileInfo.RemotePath, fileName)
 			fmt.Println("remoteFilePath:", remoteFilePath)
@@ -132,7 +148,14 @@ func GetFileFromFolder(folderPath string) ([]string, error) {
 		if file.IsDir() {
 			continue
 		}
-		fileNames = append(fileNames, file.Name())
+		fileName := file.Name()
+		if strings.HasSuffix(fileName, ".error") {
+			fileName = strings.Replace(fileName, ".error", "", -1)
+		} else if strings.HasSuffix(fileName, ".done") {
+			fileName = strings.Replace(fileName, ".done", "", -1)
+		}
+
+		fileNames = append(fileNames, fileName)
 	}
 	return fileNames, nil
 }
@@ -151,29 +174,98 @@ func SubtractList(a []string, b []string) []string {
 	return result
 }
 
-func ListFiles(sc *sftp.Client, remoteDir string, filtertime time.Time) (resultList []string, err error) {
+type RemoteFile struct {
+	files []fs.FileInfo
+}
 
+type RemoteFileOption func(rf *RemoteFile)
+
+func NewRemoteFile(sc *sftp.Client, remoteDir string, opts ...RemoteFileOption) (*RemoteFile, error) {
 	files, err := sc.ReadDir(remoteDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to list remote dir: %v\n", err)
-		return
+		return nil, err
 	}
-	resultList = []string{}
-	for _, f := range files {
-		var name, modTime, size string
-
-		name = f.Name()
-		modTime = f.ModTime().Format("2006-01-02 15:04:05")
-		size = fmt.Sprintf("%12d", f.Size())
-		fmt.Println(f.Name(), f.ModTime(), filtertime, f.ModTime().Before(filtertime))
-		if f.IsDir() || f.ModTime().Before(filtertime) {
+	noDirFile := make([]fs.FileInfo, 0, len(files))
+	count := 0
+	for _, file := range files {
+		if len(file.Name()) == 0 {
 			continue
 		}
-		resultList = append(resultList, name)
-		// Output each file name and size in bytes
-		fmt.Fprintf(os.Stdout, "%19s %12s %s\n", modTime, size, name)
+		if !file.IsDir() {
+			noDirFile = append(noDirFile, file)
+			count++
+		}
 	}
-	// fmt.Println("===", resultList)
+
+	res := &RemoteFile{
+		files: noDirFile[:count],
+	}
+	for _, opt := range opts {
+		opt(res)
+	}
+	return res, nil
+}
+
+func RemoteFileOptionByTime(filtertime time.Time) RemoteFileOption {
+	return func(rf *RemoteFile) {
+		tmpFiles := make([]fs.FileInfo, 0, len(rf.files))
+		counter := 0
+		for _, file := range rf.files {
+			if file.ModTime().After(filtertime) {
+				tmpFiles = append(tmpFiles, file)
+				counter++
+			}
+		}
+
+		rf.files = tmpFiles[:counter]
+	}
+}
+
+func RemoteFileOptionByCompare(localFileNames []string) RemoteFileOption {
+	return func(rf *RemoteFile) {
+		result := make([]fs.FileInfo, 0, len(rf.files))
+		bMap := make(map[string]bool, len(localFileNames))
+		for _, fileName := range localFileNames {
+			bMap[fileName] = true
+		}
+		count := 0
+		for _, file := range rf.files {
+			if !bMap[file.Name()] {
+				result = append(result, file)
+				count++
+			}
+		}
+		rf.files = result[:count]
+	}
+}
+
+func ListFiles(sc *sftp.Client, remoteDir string, localDirPath string, filtertime time.Time) ([]string, error) {
+	// take data from local folder
+	_, err := os.Stat(localDirPath)
+	if os.IsNotExist(err) {
+		// 文件夹不存在，创建文件夹
+		err := os.Mkdir(localDirPath, 0755)
+		if err != nil {
+			fmt.Println("无法创建文件夹:", err)
+		}
+		fmt.Println("文件夹已创建")
+	}
+	// take local files from local dir
+	localFileList, err := GetFileFromFolder(localDirPath)
+	if err != nil {
+		return nil, err
+	}
+	rf, err := NewRemoteFile(sc, remoteDir,
+		RemoteFileOptionByTime(filtertime),
+		RemoteFileOptionByCompare(localFileList))
+	if err != nil {
+		return nil, err
+	}
+	resultList := make([]string, 0, len(rf.files))
+	for _, file := range rf.files {
+		resultList = append(resultList, file.Name())
+	}
 	return resultList, nil
 }
 
