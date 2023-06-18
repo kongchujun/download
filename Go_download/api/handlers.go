@@ -116,6 +116,7 @@ func RunDownload(t time.Time) {
 			fmt.Println("err:", err.Error())
 			return
 		}
+		// interesting logic
 		resultList, _ := ListFiles(sftpClient, fileInfo, localDirPath, t)
 
 		for _, fileName := range resultList {
@@ -147,11 +148,6 @@ func RunDownload(t time.Time) {
 				err = decodeGZFile(localFilePath)
 				if err != nil {
 					fmt.Println("err in unzip:", err)
-					continue
-				}
-				err = os.Remove(localFilePath)
-				if err != nil {
-					fmt.Println("delete failed: ", err)
 				}
 			}
 		}
@@ -185,6 +181,10 @@ func decodeGZFile(localFilePath string) error {
 	if err != nil {
 		fmt.Println("Error writing to output file:", err)
 		return err
+	}
+	err = os.Remove(localFilePath)
+	if err != nil {
+		fmt.Println("delete failed: ", err)
 	}
 	return nil
 }
