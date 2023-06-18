@@ -40,7 +40,7 @@ func HelloHandler(c *gin.Context) {
 		return
 	}
 
-	RunDownload(*t)
+	RunDownload(*t, config.DownloadSFTP)
 	c.JSON(returnCode, gin.H{
 		"message": msg,
 	})
@@ -70,11 +70,11 @@ func GetStartTime(c *gin.Context, key string, timeZone string, layout string) (*
 	return &t, nil
 }
 
-func GetSshConfig(conf *config.Config) *ssh.ClientConfig {
+func GetSshConfig(username, password string) *ssh.ClientConfig {
 	sshConfig := &ssh.ClientConfig{
-		User: conf.FTPConfig.FTPUserName,
+		User: username,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(conf.FTPConfig.FTPPassword),
+			ssh.Password(password),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
@@ -89,11 +89,12 @@ func GetSshClient(sshConfig *ssh.ClientConfig, host string, port int) (*ssh.Clie
 	return sshClient, err
 }
 
-func RunDownload(t time.Time) {
+func RunDownload(t time.Time, sftpConfig config.SFTPConfig) {
 	//prepare for create sftp
-	sshConfig := GetSshConfig(config.ConfigInstance)
-	host := config.ConfigInstance.FTPConfig.FTPHost
-	port := config.ConfigInstance.FTPConfig.FTPPort
+	connConfig := sftpConfig.GetConnConfig()
+	sshConfig := GetSshConfig(connConfig.FTPUserName, connConfig.FTPPassword)
+	host := connConfig.FTPHost
+	port := connConfig.FTPPort
 	sshClient, err := GetSshClient(sshConfig, host, port)
 	if err != nil {
 		log.Fatal(err)
@@ -106,8 +107,8 @@ func RunDownload(t time.Time) {
 	}
 	defer sftpClient.Close()
 
-	tmpPath := config.ConfigInstance.LocalDir
-	for _, fileInfo := range config.ConfigInstance.CollectorConfig.MeasFileInfo {
+	tmpPath := sftpConfig.GetLocalDir()
+	for _, fileInfo := range sftpConfig.GetDownloadParams() {
 		// 创建本地文件
 		localDirPath := tmpPath + checkOS() + fileInfo.ID
 		err := CreateLocalPath(localDirPath)
@@ -115,7 +116,7 @@ func RunDownload(t time.Time) {
 			fmt.Println("err:", err.Error())
 			return
 		}
-		// interesting logic
+		// interesting logic to filter files
 		resultList, _ := ListFiles(sftpClient, fileInfo, localDirPath, t)
 
 		for _, fileName := range resultList {
@@ -319,7 +320,7 @@ func CreateLocalPath(localDirPath string) error {
 		}
 		fmt.Println("文件夹已创建")
 	}
-	return err
+	return nil
 }
 
 func ListFiles(sc *sftp.Client, fileInfo config.MeasFileInfo, localDirPath string, filtertime time.Time) ([]string, error) {

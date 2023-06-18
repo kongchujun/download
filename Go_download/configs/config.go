@@ -51,14 +51,15 @@ func ReadConfigFile(filePath string) (*Config, error) {
 
 var ConfigInstance *Config
 
-func LoadConfig(filePath string) error {
+func LoadConfig(filePath string) (*Config, error) {
+	var yamlConfig *Config
 	yamlFile, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	err = yaml.Unmarshal(yamlFile, &ConfigInstance)
+	err = yaml.Unmarshal(yamlFile, &yamlConfig)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return yamlConfig, nil
 }
