@@ -51,6 +51,7 @@ func RunDownload(t time.Time, sftpConfig config.SFTPConfig) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer pool.SFTPPool.Release(sftpClientObject)
 
 	tmpPath := sftpConfig.GetLocalDir()
 	for _, fileInfo := range sftpConfig.GetDownloadParams() {
