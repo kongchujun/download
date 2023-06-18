@@ -6,7 +6,6 @@ import (
 	config "godownload/configs"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -191,7 +190,7 @@ func decodeGZFile(localFilePath string) error {
 
 func GetFileFromFolder(folderPath string) ([]string, error) {
 	var fileNames []string
-	files, err := ioutil.ReadDir(folderPath)
+	files, err := os.ReadDir(folderPath)
 	if err != nil {
 		return nil, err
 	}
