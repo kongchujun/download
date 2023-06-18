@@ -1,1 +1,92 @@
-type SFTPConfig interface {
+package main
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+
+	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
+
+	pool "github.com/jolestar/go-commons-pool/v2"
+)
+
+const (
+	maxConnections = 5
+)
+
+func main() {
+	factory := func() (interface{}, error) {
+		config := &ssh.ClientConfig{
+			User: "username",
+			Auth: []ssh.AuthMethod{
+				ssh.Password("password"),
+			},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		}
+		client, err := ssh.Dial("tcp", "sftp.example.com:22", config)
+		if err != nil {
+			return nil, err
+		}
+		sftpClient, err := sftp.NewClient(client)
+		if err != nil {
+			return nil, err
+		}
+		return sftpClient, nil
+	}
+
+	// 创建 SFTP 连接池
+	poolConfig := &pool.ObjectPoolConfig{
+		MaxTotal: maxConnections,
+		MaxIdle:  maxConnections,
+	}
+	sftpPool, err := pool.NewObjectPoolWithDefaultConfig(poolConfig, factory)
+	if err != nil {
+		fmt.Println("创建连接池失败:", err)
+		return
+	}
+	defer sftpPool.Close()
+
+	// 从连接池获取 SFTP 连接
+	sftpConn, err := sftpPool.BorrowObject()
+	if err != nil {
+		fmt.Println("从连接池获取连接失败:", err)
+		return
+	}
+	defer sftpPool.ReturnObject(sftpConn)
+
+	// 使用 SFTP 连接执行操作
+	sftpClient := sftpConn.(*sftp.Client)
+	err = downloadFile(sftpClient, "remote_file.txt", "local_file.txt")
+	if err != nil {
+		fmt.Println("下载文件失败:", err)
+		return
+	}
+
+	fmt.Println("文件下载完成")
+}
+
+func downloadFile(client *sftp.Client, remoteFile, localFile string) error {
+	// 打开远程文件
+	remote, err := client.Open(remoteFile)
+	if err != nil {
+		return err
+	}
+	defer remote.Close()
+
+	// 创建本地文件
+	local, err := os.Create(filepath.Base(localFile))
+	if err != nil {
+		return err
+	}
+	defer local.Close()
+
+	// 复制远程文件到本地
+	_, err = io.Copy(local, remote)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

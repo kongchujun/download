@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	config "godownload/configs"
+	pool "godownload/pool"
 	"io"
 	"log"
 	"net/http"
@@ -45,21 +46,11 @@ func DownloadHanlder(c *gin.Context) {
 
 func RunDownload(t time.Time, sftpConfig config.SFTPConfig) {
 	//prepare for create sftp
-	connConfig := sftpConfig.GetConnConfig()
-	sshConfig := GetSshConfig(connConfig.FTPUserName, connConfig.FTPPassword)
-	host := connConfig.FTPHost
-	port := connConfig.FTPPort
-	sshClient, err := GetSshClient(sshConfig, host, port)
+	sftpClientObject, err := pool.SFTPPool.Acquire()
+	sftpClient := sftpClientObject.(*sftp.Client)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer sshClient.Close()
-	// create SFTP client
-	sftpClient, err := sftp.NewClient(sshClient)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer sftpClient.Close()
 
 	tmpPath := sftpConfig.GetLocalDir()
 	for _, fileInfo := range sftpConfig.GetDownloadParams() {
