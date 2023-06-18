@@ -1,6 +1,7 @@
 package api
 
 import (
+	"compress/gzip"
 	"fmt"
 	config "godownload/configs"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -109,10 +111,14 @@ func RunDownload(t time.Time) {
 	for _, fileInfo := range config.ConfigInstance.CollectorConfig.MeasFileInfo {
 		// 创建本地文件
 		localDirPath := tmpPath + checkOS() + fileInfo.ID
-		resultList, _ := ListFiles(sftpClient, fileInfo.RemotePath, localDirPath, t)
+		err := CreateLocalPath(localDirPath)
+		if err != nil {
+			fmt.Println("err:", err.Error())
+			return
+		}
+		resultList, _ := ListFiles(sftpClient, fileInfo, localDirPath, t)
 
 		for _, fileName := range resultList {
-
 			// 读取远端的文件
 			remoteFilePath := filepath.Join(fileInfo.RemotePath, fileName)
 			fmt.Println("remoteFilePath:", remoteFilePath)
@@ -124,7 +130,8 @@ func RunDownload(t time.Time) {
 			}
 			defer remoteFile.Close()
 
-			localFile, err := os.Create(filepath.Join(localDirPath, fileName))
+			localFilePath := filepath.Join(localDirPath, fileName)
+			localFile, err := os.Create(localFilePath)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -134,8 +141,52 @@ func RunDownload(t time.Time) {
 			if err != nil {
 				log.Fatal(err)
 			}
+			// unzip the .gz file.
+			_, err = os.Stat(localFilePath)
+			if err == nil && strings.HasSuffix(localFilePath, ".gz") {
+				err = decodeGZFile(localFilePath)
+				if err != nil {
+					fmt.Println("err in unzip:", err)
+					continue
+				}
+				err = os.Remove(localFilePath)
+				if err != nil {
+					fmt.Println("delete failed: ", err)
+				}
+			}
 		}
 	}
+}
+
+func decodeGZFile(localFilePath string) error {
+	file, err := os.Open(localFilePath)
+	if err != nil {
+		fmt.Println("unzip file error: ", err)
+		return err
+	}
+	defer file.Close()
+
+	gzipReader, err := gzip.NewReader(file)
+	if err != nil {
+		fmt.Println("unzip file error: ", err)
+		return err
+	}
+	defer gzipReader.Close()
+
+	// new file name
+	outputFilePath := strings.TrimSuffix(localFilePath, ".gz")
+	outputFile, err := os.Create(outputFilePath)
+	if err != nil {
+		fmt.Println("Error creating output file:", err)
+		return err
+	}
+	// unzip
+	_, err = io.Copy(outputFile, gzipReader)
+	if err != nil {
+		fmt.Println("Error writing to output file:", err)
+		return err
+	}
+	return nil
 }
 
 func GetFileFromFolder(folderPath string) ([]string, error) {
@@ -240,8 +291,26 @@ func RemoteFileOptionByCompare(localFileNames []string) RemoteFileOption {
 	}
 }
 
-func ListFiles(sc *sftp.Client, remoteDir string, localDirPath string, filtertime time.Time) ([]string, error) {
-	// take data from local folder
+func RemoteFileOptionByPattern(pattern string) RemoteFileOption {
+	return func(rf *RemoteFile) {
+		tmpFiles := make([]fs.FileInfo, 0, len(rf.files))
+		counter := 0
+		for _, file := range rf.files {
+			match, err := regexp.MatchString(pattern, file.Name())
+			if err != nil {
+				fmt.Println("matching error: ", err.Error())
+				continue
+			}
+			if match {
+				tmpFiles = append(tmpFiles, file)
+				counter++
+			}
+		}
+		rf.files = tmpFiles
+	}
+}
+
+func CreateLocalPath(localDirPath string) error {
 	_, err := os.Stat(localDirPath)
 	if os.IsNotExist(err) {
 		// 文件夹不存在，创建文件夹
@@ -251,14 +320,20 @@ func ListFiles(sc *sftp.Client, remoteDir string, localDirPath string, filtertim
 		}
 		fmt.Println("文件夹已创建")
 	}
+	return err
+}
+
+func ListFiles(sc *sftp.Client, fileInfo config.MeasFileInfo, localDirPath string, filtertime time.Time) ([]string, error) {
 	// take local files from local dir
 	localFileList, err := GetFileFromFolder(localDirPath)
 	if err != nil {
 		return nil, err
 	}
-	rf, err := NewRemoteFile(sc, remoteDir,
+	// option model: filter different condition
+	rf, err := NewRemoteFile(sc, fileInfo.RemotePath,
 		RemoteFileOptionByTime(filtertime),
-		RemoteFileOptionByCompare(localFileList))
+		RemoteFileOptionByCompare(localFileList),
+		RemoteFileOptionByPattern(fileInfo.FilePattern))
 	if err != nil {
 		return nil, err
 	}
