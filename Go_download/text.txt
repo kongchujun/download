@@ -3,87 +3,88 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
-	"path/filepath"
+	"sync"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
-
-	pool "github.com/jolestar/go-commons-pool/v2"
 )
 
 const (
-	maxConnections = 5
+	MaxConcurrentDownloads = 10
+	NumFilesToDownload     = 1000
 )
 
-func main() {
-	factory := func() (interface{}, error) {
-		config := &ssh.ClientConfig{
-			User: "username",
-			Auth: []ssh.AuthMethod{
-				ssh.Password("password"),
-			},
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		}
-		client, err := ssh.Dial("tcp", "sftp.example.com:22", config)
-		if err != nil {
-			return nil, err
-		}
-		sftpClient, err := sftp.NewClient(client)
-		if err != nil {
-			return nil, err
-		}
-		return sftpClient, nil
-	}
-
-	// 创建 SFTP 连接池
-	poolConfig := &pool.ObjectPoolConfig{
-		MaxTotal: maxConnections,
-		MaxIdle:  maxConnections,
-	}
-	sftpPool, err := pool.NewObjectPoolWithDefaultConfig(poolConfig, factory)
-	if err != nil {
-		fmt.Println("创建连接池失败:", err)
-		return
-	}
-	defer sftpPool.Close()
-
-	// 从连接池获取 SFTP 连接
-	sftpConn, err := sftpPool.BorrowObject()
-	if err != nil {
-		fmt.Println("从连接池获取连接失败:", err)
-		return
-	}
-	defer sftpPool.ReturnObject(sftpConn)
-
-	// 使用 SFTP 连接执行操作
-	sftpClient := sftpConn.(*sftp.Client)
-	err = downloadFile(sftpClient, "remote_file.txt", "local_file.txt")
-	if err != nil {
-		fmt.Println("下载文件失败:", err)
-		return
-	}
-
-	fmt.Println("文件下载完成")
+type DownloadJob struct {
+	Filename string
 }
 
-func downloadFile(client *sftp.Client, remoteFile, localFile string) error {
-	// 打开远程文件
-	remote, err := client.Open(remoteFile)
+func main() {
+	// 建立SSH连接
+	。。。。。
+	defer sftpClient.Close()
+
+	// 创建等待组和工作通道
+	var wg sync.WaitGroup
+	jobChan := make(chan DownloadJob)
+
+	// 启动工作池
+	for i := 0; i < MaxConcurrentDownloads; i++ {
+		go worker(jobChan, &wg, sftpClient)
+	}
+
+	// 添加下载任务到工作通道
+	for i := 0; i < NumFilesToDownload; i++ {
+		filename := fmt.Sprintf("file%d.txt", i+1)
+		job := DownloadJob{Filename: filename}
+		jobChan <- job
+		wg.Add(1)
+	}
+
+	// 等待所有下载完成
+	wg.Wait()
+	close(jobChan)
+	fmt.Println("All downloads completed.")
+}
+
+// 工作池的工作函数
+func worker(jobChan <-chan DownloadJob, wg *sync.WaitGroup, sftpClient *sftp.Client) {
+	for job := range jobChan {
+		// 建立每个goroutine的独立SFTP会话
+		sftpSession, err := sftpClient.NewSession()
+		if err != nil {
+			log.Printf("Failed to create SFTP session: %v", err)
+			wg.Done()
+			continue
+		}
+
+		// 执行文件下载
+		err = downloadFile(sftpSession, job.Filename)
+		if err != nil {
+			log.Printf("Failed to download file %s: %v", job.Filename, err)
+		}
+
+		sftpSession.Close()
+		wg.Done()
+	}
+}
+
+// 下载文件
+func downloadFile(session *sftp.Client, filename string) error {
+	srcFile, err := session.Open(filename)
 	if err != nil {
 		return err
 	}
-	defer remote.Close()
+	defer srcFile.Close()
 
-	// 创建本地文件
-	local, err := os.Create(filepath.Base(localFile))
+	dstFile, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
-	defer local.Close()
+	defer dstFile.Close()
 
-	// 复制远程文件到本地
-	_, err = io.Copy(local, remote)
+	_, err = io.Copy(dstFile, srcFile)
 	if err != nil {
 		return err
 	}

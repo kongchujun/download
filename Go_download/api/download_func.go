@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -144,23 +145,33 @@ func CreateLocalPath(localDirPath string) error {
 	return nil
 }
 
-func ListFiles(sc *sftp.Client, fileInfo config.MeasFileInfo, localDirPath string, filtertime time.Time) ([]string, error) {
+type DownloadInfo struct {
+	RemotePath string
+	LocalPath  string
+}
+
+func ListFiles(sc *sftp.Client, fileInfo config.MeasFileInfo, localDirPath string, filtertime time.Time) ([]DownloadInfo, error) {
 	// take local files from local dir
 	localFileList, err := GetFileFromFolder(localDirPath)
 	if err != nil {
 		return nil, err
 	}
 	// option model: filter different condition
+	// rf, err := NewRemoteFile(sc, fileInfo.RemotePath,
+	// 	RemoteFileOptionByTime(filtertime),
+	// 	RemoteFileOptionByCompare(localFileList),
+	// 	RemoteFileOptionByPattern(fileInfo.FilePattern))
 	rf, err := NewRemoteFile(sc, fileInfo.RemotePath,
-		RemoteFileOptionByTime(filtertime),
-		RemoteFileOptionByCompare(localFileList),
-		RemoteFileOptionByPattern(fileInfo.FilePattern))
+		RemoteFileOptionByCompare(localFileList))
 	if err != nil {
 		return nil, err
 	}
-	resultList := make([]string, 0, len(rf.files))
+	resultList := make([]DownloadInfo, 0, len(rf.files))
 	for _, file := range rf.files {
-		resultList = append(resultList, file.Name())
+		resultList = append(resultList, DownloadInfo{
+			RemotePath: filepath.Join(fileInfo.RemotePath, file.Name()),
+			LocalPath:  filepath.Join(localDirPath, file.Name()),
+		})
 	}
 	return resultList, nil
 }

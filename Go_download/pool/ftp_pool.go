@@ -30,6 +30,7 @@ func LoadPool() {
 		if err != nil {
 			return nil, err
 		}
+
 		return sftpClient, nil
 	}
 	var er error

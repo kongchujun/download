@@ -8,8 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -54,6 +54,7 @@ func RunDownload(t time.Time, sftpConfig config.SFTPConfig) {
 	defer pool.SFTPPool.Release(sftpClientObject)
 
 	tmpPath := sftpConfig.GetLocalDir()
+	var downInfoList []DownloadInfo
 	for _, fileInfo := range sftpConfig.GetDownloadParams() {
 		// 创建本地文件
 		localDirPath := tmpPath + checkOS() + fileInfo.ID
@@ -64,48 +65,71 @@ func RunDownload(t time.Time, sftpConfig config.SFTPConfig) {
 		}
 		// interesting logic to filter files
 		resultList, _ := ListFiles(sftpClient, fileInfo, localDirPath, t)
-		// downloald files with sync, one by one
-		downloadFileList(sftpClient, resultList, fileInfo, localDirPath)
-
+		downInfoList = append(downInfoList, resultList...)
 	}
+	//download with work pool
+	MaxWorkers := 3
+	NumTasks := len(downInfoList)
+	taskChan := make(chan DownloadInfo)
+	var wg sync.WaitGroup
+
+	// 启动工作池
+	for i := 0; i < MaxWorkers; i++ {
+		sftpClientObject, _ := pool.SFTPPool.Acquire()
+		sftpClient := sftpClientObject.(*sftp.Client)
+		go worker(taskChan, &wg, sftpClient)
+	}
+	// 添加任务到任务通道
+	for i := 0; i < NumTasks; i++ {
+		job := downInfoList[i]
+		taskChan <- job
+		wg.Add(1)
+	}
+
+	wg.Wait()
+	close(taskChan)
+
 }
 
-func downloadFileList(sftpClient *sftp.Client, resultList []string, fileInfo config.MeasFileInfo, localDirPath string) error {
-	for _, fileName := range resultList {
-		// 读取远端的文件
-		remoteFilePath := filepath.Join(fileInfo.RemotePath, fileName)
-		fmt.Println("remoteFilePath:", remoteFilePath)
-		//仅在window请求linux不耐做出的选择， 在vagrant开发不会发生这种情况
-		replacedStr := strings.ReplaceAll(remoteFilePath, "\\", "/")
-		remoteFile, err := sftpClient.Open(replacedStr)
-		if err != nil {
-			fmt.Println("failed in get remote file err: ", err)
-			continue
-		}
-		defer remoteFile.Close()
+// 工作池的工作函数
+func worker(jobChan <-chan DownloadInfo, wg *sync.WaitGroup, sftpClient *sftp.Client) {
+	for job := range jobChan {
+		// 执行文件下载
+		downloadSingleFile(sftpClient, job)
+		wg.Done()
+	}
+	pool.SFTPPool.Release(sftpClient)
+}
 
-		localFilePath := filepath.Join(localDirPath, fileName)
-		localFile, err := os.Create(localFilePath)
+func downloadSingleFile(sftpClient *sftp.Client, downloadInfo DownloadInfo) {
+	//仅在window请求linux不耐做出的选择， 在vagrant开发不会发生这种情况
+	remotePath := downloadInfo.RemotePath
+	localPath := downloadInfo.LocalPath
+	remoteFile, err := sftpClient.Open(remotePath)
+	if err != nil {
+		fmt.Println("failed in get remote file err: ", err)
+		return
+	}
+	defer remoteFile.Close()
+	localFile, err := os.Create(localPath)
+	if err != nil {
+		fmt.Println("failed in create local file err: ", err)
+		return
+	}
+	defer localFile.Close()
+	// 下载文件内容
+	_, err = io.Copy(localFile, remoteFile)
+	if err != nil {
+		fmt.Println("failed in download remote file to loacl, err: ", err)
+		return
+	}
+	// unzip the .gz file.
+	_, err = os.Stat(localPath)
+	if err == nil && strings.HasSuffix(localPath, ".gz") {
+		err = decodeGZFile(localPath)
 		if err != nil {
-			fmt.Println("failed in create local file err: ", err)
-			continue
-		}
-		defer localFile.Close()
-		// 下载文件内容
-		_, err = io.Copy(localFile, remoteFile)
-		if err != nil {
-			fmt.Println("failed in download remote file to loacl, err: ", err)
-			continue
-		}
-		// unzip the .gz file.
-		_, err = os.Stat(localFilePath)
-		if err == nil && strings.HasSuffix(localFilePath, ".gz") {
-			err = decodeGZFile(localFilePath)
-			if err != nil {
-				fmt.Println("err in unzip:", err)
-				continue
-			}
+			fmt.Println("err in unzip:", err)
+			return
 		}
 	}
-	return nil
 }
