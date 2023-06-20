@@ -34,7 +34,7 @@ func LoadPool() {
 		return sftpClient, nil
 	}
 	var er error
-	SFTPPool, er = NewGenericPool(1, 5, time.Minute, factory)
+	SFTPPool, er = NewGenericPool(4, 6, time.Minute, factory)
 	if er != nil {
 		fmt.Println("err happened in initilize connect pool: ", er)
 	}

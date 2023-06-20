@@ -67,6 +67,11 @@ func RunDownload(t time.Time, sftpConfig config.SFTPConfig) {
 		resultList, _ := ListFiles(sftpClient, fileInfo, localDirPath, t)
 		downInfoList = append(downInfoList, resultList...)
 	}
+	// // single g test
+	// for _, job := range downInfoList {
+	// 	downloadSingleFile(sftpClient, job)
+	// }
+
 	//download with work pool
 	MaxWorkers := 3
 	NumTasks := len(downInfoList)
@@ -98,7 +103,7 @@ func worker(jobChan <-chan DownloadInfo, wg *sync.WaitGroup, sftpClient *sftp.Cl
 		downloadSingleFile(sftpClient, job)
 		wg.Done()
 	}
-	pool.SFTPPool.Release(sftpClient)
+	defer pool.SFTPPool.Release(sftpClient)
 }
 
 func downloadSingleFile(sftpClient *sftp.Client, downloadInfo DownloadInfo) {
