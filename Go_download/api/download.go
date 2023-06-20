@@ -73,19 +73,23 @@ func RunDownload(t time.Time, sftpConfig config.SFTPConfig) {
 	// }
 
 	//download with work pool
-	MaxWorkers := 3
-	NumTasks := len(downInfoList)
+	runWorkPool(3, len(downInfoList), downInfoList)
+
+}
+
+func runWorkPool(maxWorkers int, numTask int, downInfoList []DownloadInfo) {
+
 	taskChan := make(chan DownloadInfo)
 	var wg sync.WaitGroup
 
 	// 启动工作池
-	for i := 0; i < MaxWorkers; i++ {
+	for i := 0; i < maxWorkers; i++ {
 		sftpClientObject, _ := pool.SFTPPool.Acquire()
 		sftpClient := sftpClientObject.(*sftp.Client)
 		go worker(taskChan, &wg, sftpClient)
 	}
 	// 添加任务到任务通道
-	for i := 0; i < NumTasks; i++ {
+	for i := 0; i < numTask; i++ {
 		job := downInfoList[i]
 		taskChan <- job
 		wg.Add(1)
@@ -93,7 +97,6 @@ func RunDownload(t time.Time, sftpConfig config.SFTPConfig) {
 
 	wg.Wait()
 	close(taskChan)
-
 }
 
 // 工作池的工作函数
