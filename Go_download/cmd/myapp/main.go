@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	ginprometheus "github.com/zsais/go-gin-prometheus"
 )
 
 func main() {
@@ -25,6 +26,11 @@ func main() {
 	}
 	pool.LoadPool()
 	router := api.SetupRouter()
+
+	//add promethues monitor
+	p := ginprometheus.NewPrometheus("my_download")
+	p.Use(router)
+
 	router.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "Hello, World!")
 	})
