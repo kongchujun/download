@@ -1,103 +1,57 @@
-package main
+在Python项目中使用Poetry管理依赖是一个好的选择。Poetry是一个强大的Python依赖管理和构建工具，它提供了更高级别的依赖解析、版本控制和项目构建。
 
-import (
-	"fmt"
-	"io"
-	"log"
-	"os"
-	"sync"
+如果你已经在Python项目中使用Poetry作为依赖管理工具，可以使用poetry install命令来安装依赖，而不是使用pip install命令。Poetry会根据项目的pyproject.toml文件中的依赖配置来安装所需的包。
 
-	"github.com/pkg/sftp"
-	"golang.org/x/crypto/ssh"
-)
-/Library/Java/JavaVirtualMachines/jdk-20.jdk/Contents/Home
+在Java代码中调用poetry install命令可以使用与之前示例中相似的ProcessBuilder来实现。以下是一个示例代码，演示了如何在Java中调用poetry install命令：
 
-JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-20.jdk/Contents/Home
-PATH=$JAVA_HOME/bin:$PATH:.
-CLASSPATH=$JAVA_HOME/lib/tools.jar:$JAVA_HOME/lib/dt.jar:.
-export JAVA_HOME
-export PATH
-export CLASSPATH
-————————————————
-版权声明：本文为CSDN博主「rambleclouds」的原创文章，遵循CC 4.0 BY-SA版权协议，转载请附上原文出处链接及本声明。
-原文链接：https://blog.csdn.net/weixin_61536532/article/details/126791735
-const (
-	MaxConcurrentDownloads = 10
-	NumFilesToDownload     = 1000
-)
+java
+Copy code
+import java.io.IOException;
 
-type DownloadJob struct {
-	Filename string
+public class DeploymentHelper {
+    public static void main(String[] args) {
+        try {
+            // 拉取代码
+            ProcessBuilder gitCloneProcess = new ProcessBuilder("git", "clone", "https://github.com/your-repo.git", "destination-folder");
+            Process gitClone = gitCloneProcess.start();
+            gitClone.waitFor();
+
+            // 安装依赖
+            ProcessBuilder poetryInstallProcess = new ProcessBuilder("poetry", "install");
+            poetryInstallProcess.directory(new File("destination-folder"));
+            Process poetryInstall = poetryInstallProcess.start();
+            poetryInstall.waitFor();
+
+            // 调用 Python 应用
+            ProcessBuilder pythonProcess = new ProcessBuilder("python", "app.py");
+            Process pythonApp = pythonProcess.start();
+            // 处理应用的输出和错误流
+            // ...
+
+            // 等待 Python 应用结束
+            pythonApp.waitFor();
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
 }
+在这个示例中，我们使用ProcessBuilder来执行poetry install命令，并设置工作目录为项目的目标文件夹。这样Poetry会在正确的位置找到pyproject.toml文件并安装所需的依赖。
 
-func main() {
-	// 建立SSH连接
-	。。。。。
-	defer sftpClient.Close()
+请确保在运行Java代码之前，已经安装了Poetry并配置了正确的环境变量，以便在命令行中执行poetry install命令。
 
-	// 创建等待组和工作通道
-	var wg sync.WaitGroup
-	jobChan := make(chan DownloadJob)
 
-	// 启动工作池
-	for i := 0; i < MaxConcurrentDownloads; i++ {
-		go worker(jobChan, &wg, sftpClient)
-	}
 
-	// 添加下载任务到工作通道
-	for i := 0; i < NumFilesToDownload; i++ {
-		filename := fmt.Sprintf("file%d.txt", i+1)
-		job := DownloadJob{Filename: filename}
-		jobChan <- job
-		wg.Add(1)
-	}
+是的，Poetry可以用来安装.whl结尾的第三方包文件。.whl文件是Python的二进制分发格式，包含了预编译的Python包。
 
-	// 等待所有下载完成
-	wg.Wait()
-	close(jobChan)
-	fmt.Println("All downloads completed.")
-}
+你可以通过在Poetry的pyproject.toml文件中添加.whl文件的路径或URL来引用并安装它们。在dependencies部分添加一个新的条目，并指定.whl文件的路径或URL，如下所示：
 
-// 工作池的工作函数
-func worker(jobChan <-chan DownloadJob, wg *sync.WaitGroup, sftpClient *sftp.Client) {
-	for job := range jobChan {
-		// 建立每个goroutine的独立SFTP会话
-		sftpSession, err := sftpClient.NewSession()
-		if err != nil {
-			log.Printf("Failed to create SFTP session: %v", err)
-			wg.Done()
-			continue
-		}
+toml
+Copy code
+[tool.poetry.dependencies]
+python = "^3.9"
+my-package = {file = "path/to/my-package.whl"}
+在上述示例中，我们假设你的项目依赖于一个名为my-package的第三方包，且该包的.whl文件位于path/to/my-package.whl。
 
-		// 执行文件下载
-		err = downloadFile(sftpSession, job.Filename)
-		if err != nil {
-			log.Printf("Failed to download file %s: %v", job.Filename, err)
-		}
+在运行poetry install命令时，Poetry会读取pyproject.toml文件并安装指定的.whl文件作为依赖项。
 
-		sftpSession.Close()
-		wg.Done()
-	}
-}
-
-// 下载文件
-func downloadFile(session *sftp.Client, filename string) error {
-	srcFile, err := session.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	_, err = io.Copy(dstFile, srcFile)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
+请确保.whl文件的路径或URL正确，并且文件是有效的、与你的Python环境兼容的二进制包。

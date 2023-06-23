@@ -24,12 +24,31 @@ change config file path in Go_download/cmd/myapp/main.go
 ```
 #!/bin/bash
 
-# 设置生成文件的数量和内容
+# generate files for test
 file_count=30
 file_content="This is the contentssssssssssssssssssssdfdsfsdfsdfadsf asdfasdfasdfasdfasdfasdfasdfasdfasdfasdf of the file."
 
-# 循环生成文件
+# run loop to create it
 for ((i=1; i<=file_count; i++)); do
     echo "$file_content" > "file${i}.txt"
 done
+```
+
+# set up debug for gin in vscode
+```
+create .vscode folder in Go_download folder, then create launch.json and add content below in it
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Launch Gin",
+        "type": "go",
+        "request": "launch",
+        "mode": "debug",
+        "program": "${workspaceFolder}",
+        "env": {},
+        "args": []
+      }
+    ]
+  }
 ```

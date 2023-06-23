@@ -1,6 +1,6 @@
 # 忽略编辑器和 IDE 生成的配置文件和目录
 .idea/
-.vscode/
+/Go_download/.vscode/
 
 # ignore test env
 /dev/sftp-debug
