@@ -1,7 +1,0 @@
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'myapp'
-    static_configs:
-      - targets: ['host.docker.internal:8090']  # 替换为你的应用程序的主机和端口

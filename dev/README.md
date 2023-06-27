@@ -1,3 +1,11 @@
+# after download project please use mod init command to build it
+```
+cd Go-download
+rm -f go.mod go.sum
+go mod init godownload
+go mod tidy
+```
+
 # install vagrant and virtualbox
 ```
 https://www.vagrantup.com/
