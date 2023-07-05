@@ -64,12 +64,14 @@ func (p *GenericPool) Acquire() (io.Closer, error) {
 		if err != nil {
 			return nil, err
 		}
-		// todo maxLifttime处理
+		// todo maxLifttime处理， for跟这个逻辑处理相关
 		return closer, nil
 	}
 }
 
 func (p *GenericPool) getOrCreate() (io.Closer, error) {
+	// 先获取，有就返回， 没有的话，就创造出来返回。
+	// 不过要创造之前， 要检查一次是否满了
 	select {
 	case closer := <-p.pool:
 		return closer, nil
