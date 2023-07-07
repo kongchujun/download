@@ -157,12 +157,12 @@ func ListFiles(sc *sftp.Client, fileInfo config.MeasFileInfo, localDirPath strin
 		return nil, err
 	}
 	// option model: filter different condition
-	// rf, err := NewRemoteFile(sc, fileInfo.RemotePath,
-	// 	RemoteFileOptionByTime(filtertime),
-	// 	RemoteFileOptionByCompare(localFileList),
-	// 	RemoteFileOptionByPattern(fileInfo.FilePattern))
 	rf, err := NewRemoteFile(sc, fileInfo.RemotePath,
-		RemoteFileOptionByCompare(localFileList))
+		RemoteFileOptionByTime(filtertime),
+		RemoteFileOptionByCompare(localFileList),
+		RemoteFileOptionByPattern(fileInfo.FilePattern))
+	// rf, err := NewRemoteFile(sc, fileInfo.RemotePath,
+	// 	RemoteFileOptionByCompare(localFileList))
 	if err != nil {
 		return nil, err
 	}
